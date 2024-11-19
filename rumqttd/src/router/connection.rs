@@ -33,6 +33,17 @@ pub struct Connection {
     pub(crate) broker_topic_aliases: Option<BrokerAliases>,
     /// subscription IDs for a connection
     pub(crate) subscription_ids: HashMap<Filter, usize>,
+    pub username: Option<String>,
+    pub webhook_url: Option<String>,
+    pub retained_url: Option<String>,
+    pub authorization_url: Option<String>,
+}
+
+pub struct WebhookConnectionProperties {
+    pub username: Option<String>,
+    pub webhook_url: Option<String>,
+    pub retained_url: Option<String>,
+    pub authorization_url: Option<String>,
 }
 
 impl Connection {
@@ -42,6 +53,7 @@ impl Connection {
         client_id: String,
         clean: bool,
         dynamic_filters: bool,
+        webhook_connection_properties: WebhookConnectionProperties,
     ) -> Connection {
         // Change client id to -> tenant_id.client_id and derive topic path prefix
         // to validate topics
@@ -66,6 +78,10 @@ impl Connection {
             topic_aliases: HashMap::new(),
             broker_topic_aliases: None,
             subscription_ids: HashMap::new(),
+            username: webhook_connection_properties.username,
+            webhook_url: webhook_connection_properties.webhook_url,
+            authorization_url: webhook_connection_properties.authorization_url,
+            retained_url: webhook_connection_properties.retained_url,
         }
     }
 

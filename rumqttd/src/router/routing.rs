@@ -4,11 +4,15 @@ use crate::protocol::{
     PubRecReason, PubRel, PubRelReason, Publish, PublishProperties, QoS, SubAck,
     SubscribeReasonCode, UnsubAck, UnsubAckReason,
 };
+use crate::requests::utils_requests;
+use crate::requests::utils_requests::MqttRetainedPayload;
+use crate::requests::utils_webhook;
 use crate::router::alertlog::alert;
 use crate::router::scheduler::{PauseReason, Tracker};
 use crate::router::{ConnectionEvents, Forward};
 use crate::segments::Position;
 use crate::*;
+use bytes::Bytes;
 use flume::{bounded, Receiver, RecvError, Sender, TryRecvError};
 use slab::Slab;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -50,6 +54,8 @@ pub enum RouterError {
     InvalidClientId(String),
     #[error("Disconnection (Reason: {0:?})")]
     Disconnect(DisconnectReasonCode),
+    #[error("User Not Authorized {0}")]
+    UserNotAuthorized(String),
 }
 
 // TODO: set this to some appropriate value
@@ -215,7 +221,7 @@ impl Router {
 
         // A connection should not be scheduled multiple times
         #[cfg(debug_assertions)]
-        if let Some(readyqueue) = self.scheduler.check_readyqueue_duplicates() {
+        if let Some(readyqueue) = self.scheduler._check_readyqueue_duplicates() {
             warn!(
                 "Connection was scheduled multiple times in readyqueue: {:?}",
                 readyqueue
@@ -532,7 +538,7 @@ impl Router {
 
     /// Handles new incoming data on a topic
     fn handle_device_payload(&mut self, id: ConnectionId) {
-        // TODO: Retun errors and move error handling to the caller
+        // TODO: Return errors and move error handling to the caller
         let incoming = match self.ibufs.get_mut(id) {
             Some(v) => v,
             None => {
@@ -651,12 +657,16 @@ impl Router {
                     // let len = s.len();
 
                     for f in &mut subscribe.filters {
+                        let connection = self.connections.get_mut(id).unwrap();
+                        f.path = utils_webhook::add_username_to_topic(
+                            &f.path,
+                            connection.username.clone(),
+                        );
                         let span =
                             tracing::info_span!("subscribe", topic = f.path, pkid = subscribe.pkid);
                         let _guard = span.enter();
 
                         info!("Adding subscription on topic {}", f.path);
-                        let connection = self.connections.get_mut(id).unwrap();
 
                         if let Err(e) = validate_subscription(connection, f) {
                             warn!(reason = ?e,"Subscription cannot be validated: {}", e);
@@ -1465,7 +1475,46 @@ fn forward_device_data(
         // NOTE: ideally we want to limit the number of read messages
         // and skip the messages previously read while reading next time.
         // but for now, we just try to read all messages and drop the excess ones
-        let mut retained_publishes = datalog.read_retained_messages(&request.filter);
+        let retained_url = connection.retained_url.to_owned();
+        let mut retained_publishes: Vec<(Publish, Option<PublishProperties>)> = vec![];
+        if let Some(retained_url) = retained_url {
+            let topic = request.filter.to_owned();
+            let mqtt_retained_payload = MqttRetainedPayload { topic: Some(topic) };
+            let mqtt_retained_response =
+                utils_requests::retained(&retained_url, mqtt_retained_payload);
+            if let Some(retained_messages) = mqtt_retained_response.mqtt_retained_result {
+                retained_publishes = retained_messages
+                    .iter()
+                    .map(|mqtt_retained_result| {
+                        (
+                            Publish {
+                                dup: false,
+                                qos: QoS::AtMostOnce,
+                                pkid: 1,
+                                retain: true,
+                                topic: Bytes::from(
+                                    mqtt_retained_result
+                                        .topic
+                                        .to_owned()
+                                        .unwrap()
+                                        .as_bytes()
+                                        .to_vec(),
+                                ),
+                                payload: Bytes::from(
+                                    mqtt_retained_result
+                                        .payload
+                                        .to_owned()
+                                        .unwrap()
+                                        .as_bytes()
+                                        .to_vec(),
+                                ),
+                            },
+                            None,
+                        )
+                    })
+                    .collect();
+            }
+        }
         retained_publishes.truncate(inflight_slots as usize);
 
         publishes.extend(retained_publishes.into_iter().map(|p| (p, None)));
@@ -1587,6 +1636,7 @@ fn forward_device_data(
                 size: 0,
                 publish,
                 properties,
+                username: connection.username.clone(),
             }
         });
 
@@ -1736,8 +1786,24 @@ fn validate_subscription(
     if filter.path.starts_with('$') && !filter.path.starts_with("$share") {
         return Err(RouterError::InvalidFilterPrefix(filter.path.to_owned()));
     }
-
-    Ok(())
+    let action = "subscribe";
+    let username = connection.username.clone().unwrap_or("".to_string());
+    let topic = &filter.path;
+    let authorization_url = connection.authorization_url.to_owned();
+    match authorization_url {
+        Some(authorization_url) => {
+            let response =
+                utils_requests::authorize_user(&authorization_url, &username, topic, action);
+            match response.auth_response {
+                Some(response) => match response.result.as_str() {
+                    "allow" => Ok(()),
+                    _ => Err(RouterError::UserNotAuthorized(username)),
+                },
+                None => Ok(()),
+            }
+        }
+        None => Ok(()),
+    }
 }
 
 fn validate_clientid(client_id: &str) -> Result<(), RouterError> {

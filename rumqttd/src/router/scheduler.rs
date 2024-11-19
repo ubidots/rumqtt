@@ -201,7 +201,7 @@ impl Tracker {
 // Methods to check duplicates in trackers and schedulers
 impl Scheduler {
     // Return a `Some` if duplicate were found, otherwise `None`
-    pub fn check_readyqueue_duplicates(&self) -> Option<&VecDeque<ConnectionId>> {
+    pub fn _check_readyqueue_duplicates(&self) -> Option<&VecDeque<ConnectionId>> {
         let readyqueue = &self.readyqueue;
         // In _worst_ case where all elements are unique, the size of uniq will be same as len of readyqueue
         let mut uniq = HashSet::with_capacity(readyqueue.len());

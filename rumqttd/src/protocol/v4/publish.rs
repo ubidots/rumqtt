@@ -1,5 +1,9 @@
+use crate::requests::utils_webhook::remove_username_from_topic;
+
 use super::*;
 use bytes::{Buf, Bytes};
+use core::str;
+use regex::Regex;
 
 fn len(publish: &Publish) -> usize {
     let len = 2 + publish.topic.len() + publish.payload.len();
@@ -42,7 +46,10 @@ pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Publish, Erro
 }
 
 pub fn write(publish: &Publish, buffer: &mut BytesMut) -> Result<usize, Error> {
-    let len = publish.len();
+    let topic = publish.topic.clone();
+    let new_topic = remove_username_from_topic(publish.topic.clone());
+    let delta = new_topic.len() - topic.len();
+    let len = publish.len() + delta;
 
     let dup = publish.dup as u8;
     let qos = publish.qos as u8;
@@ -50,7 +57,7 @@ pub fn write(publish: &Publish, buffer: &mut BytesMut) -> Result<usize, Error> {
     buffer.put_u8(0b0011_0000 | retain | qos << 1 | dup << 3);
 
     let count = write_remaining_length(buffer, len)?;
-    write_mqtt_bytes(buffer, &publish.topic);
+    write_mqtt_bytes(buffer, &new_topic);
 
     if publish.qos != QoS::AtMostOnce {
         let pkid = publish.pkid;

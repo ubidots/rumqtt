@@ -1,10 +1,10 @@
-use config::FileFormat;
+use rumqttd::requests::utils_requests;
+use rumqttd::requests::utils_settings;
 use rumqttd::Broker;
 
 use clap::Parser;
 use tracing::trace;
-
-static RUMQTTD_DEFAULT_CONFIG: &str = include_str!("../rumqttd.toml");
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 #[command(version)]
@@ -33,22 +33,9 @@ enum Command {
 
 fn main() {
     let commandline: CommandLine = CommandLine::parse();
-
-    if let Some(Command::GenerateConfig) = commandline.command {
-        println!("{RUMQTTD_DEFAULT_CONFIG}");
-        return;
-    }
-
     if !commandline.quiet {
         banner();
     }
-
-    let level = match commandline.verbose {
-        0 => "rumqttd=warn",
-        1 => "rumqttd=info",
-        2 => "rumqttd=debug",
-        _ => "rumqttd=trace",
-    };
 
     // tracing syntax ->
     let builder = tracing_subscriber::fmt()
@@ -57,27 +44,20 @@ fn main() {
         .with_file(false)
         .with_thread_ids(false)
         .with_thread_names(false)
-        .with_env_filter(level)
+        .with_env_filter(EnvFilter::from_env("RUST_LOG"))
         .with_filter_reloading();
 
     let reload_handle = builder.reload_handle();
 
     builder
         .try_init()
-        .expect("initialized subscriber succesfully");
+        .expect("initialized subscriber successfully");
 
-    let mut config_builder = config::Config::builder();
-
-    config_builder = match &commandline.config {
-        Some(config) => config_builder.add_source(config::File::with_name(config)),
-        None => config_builder.add_source(config::File::from_str(
-            RUMQTTD_DEFAULT_CONFIG,
-            FileFormat::Toml,
-        )),
-    };
-
-    let mut configs: rumqttd::Config = config_builder.build().unwrap().try_deserialize().unwrap();
-
+    let mut configs = utils_settings::get_settings();
+    let webhook_url = utils_settings::get_webhook_url(&configs);
+    let authentication_url = utils_settings::get_authentication_url(&configs);
+    let authorization_url = utils_settings::get_authorization_url(&configs);
+    let retained_url = utils_settings::get_retained_url(&configs);
     if let Some(console_config) = configs.console.as_mut() {
         console_config.set_filter_reload_handle(reload_handle)
     }
@@ -86,8 +66,26 @@ fn main() {
 
     // println!("{:#?}", configs);
 
+    let server = configs.v4.as_mut().and_then(|v4| v4.get_mut("1")).unwrap();
+    server.set_webhook_auth_handler(
+        auth,
+        authentication_url.to_string(),
+        webhook_url.to_string(),
+        authorization_url.to_string(),
+        retained_url.to_string(),
+    );
     let mut broker = Broker::new(configs);
     broker.start().unwrap();
+}
+
+async fn auth(webhook_url: String, _client_id: String, username: String, password: String) -> bool {
+    // users can fetch data from DB or tokens and use them!
+    // do the verification and return true if verified, else false
+    let result = utils_requests::authenticate_user(&webhook_url, &username, &password).await;
+    match result.auth_response {
+        Some(response) => response.result == "allow",
+        None => false,
+    }
 }
 
 // Do any extra validation that needs to be done before starting the broker here.
