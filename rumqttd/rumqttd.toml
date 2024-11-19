@@ -38,7 +38,7 @@ max_segment_count = 10
 # Configuration of server and connections that it accepts
 [v4.1]
 name = "v4-1"
-listen = "0.0.0.0:1883"
+listen = "0.0.0.0:1885"
 next_connection_delay_ms = 1
     [v4.1.connections]
     connection_timeout_ms = 60000
@@ -77,7 +77,7 @@ next_connection_delay_ms = 1
     max_inflight_count = 100
 
 [prometheus]
-listen = "127.0.0.1:9042"
+listen = "127.0.0.1:9044"
 interval = 1
 
 [ws.1]
@@ -116,3 +116,21 @@ listen = "0.0.0.0:3030"
 #     push_interval = 1
 #     [metrics.meters]
 #     push_interval = 1
+
+[webhook]
+authentication_protocol = "http"
+authentication_host = "localhost"
+authentication_port = "8000"
+authentication_endpoint = "/authentication"
+authorization_protocol = "http"
+authorization_host = "localhost"
+authorization_port = "8000"
+authorization_endpoint = "/authorization"
+webhook_protocol = "http"
+webhook_host = "localhost"
+webhook_port = "8000"
+webhook_endpoint = "/webhook"
+retained_protocol = "http"
+retained_host = "localhost"
+retained_port = "8000"
+retained_endpoint = "/retained"

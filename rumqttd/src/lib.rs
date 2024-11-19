@@ -29,6 +29,7 @@ pub use self::router::shared_subs::Strategy;
 
 mod link;
 pub mod protocol;
+pub mod requests;
 mod router;
 mod segments;
 mod server;
@@ -45,8 +46,19 @@ pub type Cursor = (u64, u64);
 pub type ClientId = String;
 pub type AuthUser = String;
 pub type AuthPass = String;
+pub type AuthUrl = String;
 pub type AuthHandler = Arc<
     dyn Fn(ClientId, AuthUser, AuthPass) -> Pin<Box<dyn std::future::Future<Output = bool> + Send>>
+        + Send
+        + Sync,
+>;
+pub type WebhookAuthHandler = Arc<
+    dyn Fn(
+            AuthUrl,
+            ClientId,
+            AuthUser,
+            AuthPass,
+        ) -> Pin<Box<dyn std::future::Future<Output = bool> + Send>>
         + Send
         + Sync,
 >;
@@ -63,6 +75,7 @@ pub struct Config {
     pub bridge: Option<BridgeConfig>,
     pub prometheus: Option<PrometheusSetting>,
     pub metrics: Option<HashMap<MetricType, MetricSettings>>,
+    pub webhook: Option<WebhookConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -127,6 +140,27 @@ impl ServerSettings {
     {
         self.connections.set_auth_handler(auth_fn)
     }
+
+    pub fn set_webhook_auth_handler<F, O>(
+        &mut self,
+        auth_fn: F,
+        authentication_url: String,
+        webhook_url: String,
+        authorization_url: String,
+        retained_url: String,
+    ) where
+        F: Fn(AuthUrl, ClientId, AuthUser, AuthPass) -> O + Send + Sync + 'static,
+        O: IntoFuture<Output = bool> + 'static,
+        O::IntoFuture: Send,
+    {
+        self.connections.set_webhook_auth_handler(
+            auth_fn,
+            authentication_url,
+            webhook_url,
+            authorization_url,
+            retained_url,
+        )
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -150,6 +184,16 @@ pub struct ConnectionSettings {
     pub auth: Option<HashMap<String, String>>,
     #[serde(skip)]
     pub external_auth: Option<AuthHandler>,
+    #[serde(skip)]
+    pub webhook_external_auth: Option<WebhookAuthHandler>,
+    #[serde(skip)]
+    pub authentication_url: Option<String>,
+    #[serde(skip)]
+    pub webhook_url: Option<String>,
+    #[serde(skip)]
+    pub authorization_url: Option<String>,
+    #[serde(skip)]
+    pub retained_url: Option<String>,
     #[serde(default)]
     pub dynamic_filters: bool,
 }
@@ -165,6 +209,30 @@ impl ConnectionSettings {
             let auth = auth_fn(client_id, username, password).into_future();
             Box::pin(auth)
         }));
+    }
+
+    pub fn set_webhook_auth_handler<F, O>(
+        &mut self,
+        auth_fn: F,
+        authentication_url: String,
+        webhook_url: String,
+        authorization_url: String,
+        retained_url: String,
+    ) where
+        F: Fn(AuthUrl, ClientId, AuthUser, AuthPass) -> O + Send + Sync + 'static,
+        O: IntoFuture<Output = bool> + 'static,
+        O::IntoFuture: Send,
+    {
+        self.authentication_url = Some(authentication_url);
+        self.webhook_url = Some(webhook_url);
+        self.authorization_url = Some(authorization_url);
+        self.retained_url = Some(retained_url);
+        self.webhook_external_auth = Some(Arc::new(
+            move |webhook_url, client_id, username, password| {
+                let auth = auth_fn(webhook_url, client_id, username, password).into_future();
+                Box::pin(auth)
+            },
+        ));
     }
 }
 
@@ -202,6 +270,26 @@ pub struct RouterConfig {
     // defaults to Round Robin
     #[serde(default)]
     pub shared_subscriptions_strategy: Strategy,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct WebhookConfig {
+    authentication_protocol: String,
+    authentication_host: String,
+    authentication_port: String,
+    authentication_endpoint: String,
+    authorization_protocol: String,
+    authorization_host: String,
+    authorization_port: String,
+    authorization_endpoint: String,
+    webhook_protocol: String,
+    webhook_host: String,
+    webhook_port: String,
+    webhook_endpoint: String,
+    retained_protocol: String,
+    retained_host: String,
+    retained_port: String,
+    retained_endpoint: String,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

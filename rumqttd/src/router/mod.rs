@@ -27,6 +27,7 @@ mod waiters;
 
 pub use alertlog::Alert;
 pub use connection::Connection;
+pub use connection::WebhookConnectionProperties;
 pub use routing::Router;
 pub use waiters::Waiters;
 
@@ -116,6 +117,7 @@ pub struct Forward {
     pub size: usize,
     pub publish: Publish,
     pub properties: Option<PublishProperties>,
+    pub username: Option<String>,
 }
 
 #[derive(Debug, Clone)]

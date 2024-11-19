@@ -6,6 +6,7 @@ use crate::protocol::{ConnAck, Connect, ConnectReturnCode, Login, Packet, Protoc
 use crate::router::{Event, Notification};
 use crate::{ConnectionId, ConnectionSettings};
 
+use crate::requests::utils_webhook;
 use flume::{RecvError, SendError, Sender, TrySendError};
 use std::cmp::min;
 use std::collections::VecDeque;
@@ -58,6 +59,16 @@ pub struct RemoteLink<P> {
     link_rx: LinkRx,
     notifications: VecDeque<Notification>,
     pub(crate) will_delay_interval: u32,
+    username: Option<String>,
+    client_id: String,
+    webhook_url: Option<String>,
+}
+
+pub struct WebhookProperties {
+    pub username: Option<String>,
+    pub webhook_url: Option<String>,
+    pub retained_url: Option<String>,
+    pub authorization_url: Option<String>,
 }
 
 impl<P: Protocol> RemoteLink<P> {
@@ -68,6 +79,7 @@ impl<P: Protocol> RemoteLink<P> {
         connect_packet: Packet,
         dynamic_filters: bool,
         assigned_client_id: Option<String>,
+        webhook_properties: WebhookProperties,
     ) -> Result<RemoteLink<P>, Error> {
         let Packet::Connect(connect, props, lastwill, lastwill_props, _) = connect_packet else {
             return Err(Error::NotConnectPacket(connect_packet));
@@ -76,6 +88,7 @@ impl<P: Protocol> RemoteLink<P> {
         // Register this connection with the router. Router replys with ack which if ok will
         // start the link. Router can sometimes reject the connection (ex max connection limit)
         let client_id = assigned_client_id.as_ref().unwrap_or(&connect.client_id);
+        let connection_client_id = client_id.to_string();
         let clean_session = connect.clean_session;
 
         let topic_alias_max = props.as_ref().and_then(|p| p.topic_alias_max);
@@ -93,14 +106,21 @@ impl<P: Protocol> RemoteLink<P> {
         // the Will Delay Interval has passed or the Session ends, whichever happens first
         let will_delay_interval = min(session_expiry, delay_interval);
 
-        let (link_tx, link_rx, notification) = LinkBuilder::new(client_id, router_tx)
-            .tenant_id(tenant_id)
-            .clean_session(clean_session)
-            .last_will(lastwill)
-            .last_will_properties(lastwill_props)
-            .dynamic_filters(dynamic_filters)
-            .topic_alias_max(topic_alias_max.unwrap_or(0))
-            .build()?;
+        let (link_tx, link_rx, notification) = LinkBuilder::new(
+            client_id,
+            router_tx,
+            webhook_properties.username.to_owned(),
+            webhook_properties.webhook_url.to_owned(),
+            webhook_properties.retained_url.to_owned(),
+            webhook_properties.authorization_url.to_owned(),
+        )
+        .tenant_id(tenant_id)
+        .clean_session(clean_session)
+        .last_will(lastwill)
+        .last_will_properties(lastwill_props)
+        .dynamic_filters(dynamic_filters)
+        .topic_alias_max(topic_alias_max.unwrap_or(0))
+        .build()?;
 
         let id = link_rx.id();
         Span::current().record("connection_id", id);
@@ -122,6 +142,9 @@ impl<P: Protocol> RemoteLink<P> {
             link_rx,
             notifications: VecDeque::with_capacity(100),
             will_delay_interval,
+            username: webhook_properties.username,
+            client_id: connection_client_id,
+            webhook_url: webhook_properties.webhook_url,
         })
     }
 
@@ -134,6 +157,11 @@ impl<P: Protocol> RemoteLink<P> {
             select! {
                 o = self.network.read() => {
                     let packet = o?;
+                    let client_id = self.client_id.to_string();
+                    let username = self.username.to_owned();
+                    let webhook_url = self.webhook_url.to_owned();
+                    utils_webhook::call_webhook_from_packet(packet.clone(), client_id, username, webhook_url).await;
+
                     let len = {
                         let mut buffer = self.link_tx.buffer();
                         buffer.push_back(packet);
@@ -198,7 +226,7 @@ where
     handle_auth(config.clone(), login.as_ref(), &connect.client_id).await?;
 
     // When keep_alive feature is disabled client can live forever, which is not good in
-    // distributed broker context so currenlty we don't allow it.
+    // distributed broker context so currently we don't allow it.
     if connect.keep_alive == 0 {
         return Err(Error::ZeroKeepAlive);
     }
@@ -227,7 +255,10 @@ async fn handle_auth(
     login: Option<&Login>,
     client_id: &str,
 ) -> Result<(), Error> {
-    if config.auth.is_none() && config.external_auth.is_none() {
+    if config.auth.is_none()
+        && config.external_auth.is_none()
+        && config.webhook_external_auth.is_none()
+    {
         return Ok(());
     }
 
@@ -252,6 +283,22 @@ async fn handle_auth(
         }
 
         return Ok(());
+    }
+
+    if let Some(auth) = &config.webhook_external_auth {
+        if let Some(authentication_url) = &config.authentication_url {
+            if !auth(
+                authentication_url.to_owned(),
+                client_id.to_owned(),
+                username.to_owned(),
+                password.to_owned(),
+            )
+            .await
+            {
+                return Err(Error::InvalidAuth);
+            }
+            return Ok(());
+        }
     }
 
     if let Some(pairs) = &config.auth {
@@ -282,6 +329,11 @@ mod tests {
             max_inflight_count: 0,
             auth: None,
             external_auth: None,
+            webhook_external_auth: None,
+            authentication_url: None,
+            webhook_url: None,
+            authorization_url: None,
+            retained_url: None,
             dynamic_filters: false,
         }
     }

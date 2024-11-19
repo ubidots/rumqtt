@@ -48,6 +48,10 @@ pub async fn start<P>(
     config: BridgeConfig,
     router_tx: Sender<(ConnectionId, Event)>,
     protocol: P,
+    username: Option<String>,
+    webhook_url: Option<String>,
+    retained_url: Option<String>,
+    authorization_url: Option<String>,
 ) -> Result<(), BridgeError>
 where
     P: Protocol + Clone + Send + 'static,
@@ -61,9 +65,16 @@ where
         "Starting bridge with subscription on filter \"{}\"",
         &config.sub_path,
     );
-    let (mut tx, mut rx, _ack) = LinkBuilder::new(&config.name, router_tx)
-        .dynamic_filters(true)
-        .build()?;
+    let (mut tx, mut rx, _ack) = LinkBuilder::new(
+        &config.name,
+        router_tx,
+        username,
+        webhook_url,
+        retained_url,
+        authorization_url,
+    )
+    .dynamic_filters(true)
+    .build()?;
 
     'outer: loop {
         let mut network = match network_connect(&config, &config.addr, protocol.clone()).await {

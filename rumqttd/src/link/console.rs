@@ -22,12 +22,26 @@ pub struct ConsoleLink {
 
 impl ConsoleLink {
     /// Requires the corresponding Router to be running to complete
-    pub fn new(config: ConsoleSettings, router_tx: Sender<(ConnectionId, Event)>) -> ConsoleLink {
+    pub fn new(
+        config: ConsoleSettings,
+        router_tx: Sender<(ConnectionId, Event)>,
+        username: Option<String>,
+        webhook_url: Option<String>,
+        retained_url: Option<String>,
+        authorization_url: Option<String>,
+    ) -> ConsoleLink {
         let tx = router_tx.clone();
-        let (link_tx, link_rx, _ack) = LinkBuilder::new("console", tx)
-            .dynamic_filters(true)
-            .build()
-            .unwrap();
+        let (link_tx, link_rx, _ack) = LinkBuilder::new(
+            "console",
+            tx,
+            username,
+            webhook_url,
+            retained_url,
+            authorization_url,
+        )
+        .dynamic_filters(true)
+        .build()
+        .unwrap();
         let connection_id = link_tx.connection_id;
         ConsoleLink {
             config,

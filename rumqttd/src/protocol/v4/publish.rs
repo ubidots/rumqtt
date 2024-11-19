@@ -1,5 +1,7 @@
 use super::*;
 use bytes::{Buf, Bytes};
+use core::str;
+use regex::Regex;
 
 fn len(publish: &Publish) -> usize {
     let len = 2 + publish.topic.len() + publish.payload.len();
@@ -41,8 +43,19 @@ pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Publish, Erro
     Ok(publish)
 }
 
+fn replace_topic(topic: Bytes) -> Bytes {
+    let re = Regex::new(r"/users/[^/]+").unwrap();
+    let topic_string: String = String::from_utf8(topic.to_vec()).unwrap();
+    let topic_string = re.replace(&topic_string, "");
+    let topic_bytes = topic_string.as_bytes().to_vec();
+    Bytes::from(topic_bytes)
+}
+
 pub fn write(publish: &Publish, buffer: &mut BytesMut) -> Result<usize, Error> {
-    let len = publish.len();
+    let topic = publish.topic.clone();
+    let new_topic = replace_topic(publish.topic.clone());
+    let delta = new_topic.len() - topic.len();
+    let len = publish.len() + delta;
 
     let dup = publish.dup as u8;
     let qos = publish.qos as u8;
@@ -50,7 +63,7 @@ pub fn write(publish: &Publish, buffer: &mut BytesMut) -> Result<usize, Error> {
     buffer.put_u8(0b0011_0000 | retain | qos << 1 | dup << 3);
 
     let count = write_remaining_length(buffer, len)?;
-    write_mqtt_bytes(buffer, &publish.topic);
+    write_mqtt_bytes(buffer, &new_topic);
 
     if publish.qos != QoS::AtMostOnce {
         let pkid = publish.pkid;

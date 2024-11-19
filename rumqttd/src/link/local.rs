@@ -2,11 +2,11 @@ use crate::protocol::{
     Filter, LastWill, LastWillProperties, Packet, Publish, QoS, RetainForwardRule, Subscribe,
     Unsubscribe,
 };
-use crate::router::Ack;
 use crate::router::{
     iobufs::{Incoming, Outgoing},
     Connection, Event, Notification, ShadowRequest,
 };
+use crate::router::{Ack, WebhookConnectionProperties};
 use crate::ConnectionId;
 use bytes::Bytes;
 use flume::{Receiver, RecvError, RecvTimeoutError, SendError, Sender, TrySendError};
@@ -49,10 +49,21 @@ pub struct LinkBuilder<'a> {
     dynamic_filters: bool,
     // default to 0, indicating to not use topic alias
     topic_alias_max: u16,
+    username: Option<String>,
+    webhook_url: Option<String>,
+    retained_url: Option<String>,
+    authorization_url: Option<String>,
 }
 
 impl<'a> LinkBuilder<'a> {
-    pub fn new(client_id: &'a str, router_tx: Sender<(ConnectionId, Event)>) -> Self {
+    pub fn new(
+        client_id: &'a str,
+        router_tx: Sender<(ConnectionId, Event)>,
+        username: Option<String>,
+        webhook_url: Option<String>,
+        retained_url: Option<String>,
+        authorization_url: Option<String>,
+    ) -> Self {
         LinkBuilder {
             client_id,
             router_tx,
@@ -62,6 +73,10 @@ impl<'a> LinkBuilder<'a> {
             last_will_properties: None,
             dynamic_filters: false,
             topic_alias_max: 0,
+            username,
+            webhook_url,
+            retained_url,
+            authorization_url,
         }
     }
 
@@ -106,6 +121,12 @@ impl<'a> LinkBuilder<'a> {
             self.client_id.to_owned(),
             self.clean_session,
             self.dynamic_filters,
+            WebhookConnectionProperties {
+                username: self.username,
+                webhook_url: self.webhook_url,
+                retained_url: self.retained_url,
+                authorization_url: self.authorization_url,
+            },
         );
 
         connection

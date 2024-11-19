@@ -38,6 +38,7 @@ use crate::link::local::{self, LinkRx, LinkTx};
 use crate::router::{Event, Router};
 use crate::{Config, ConnectionId, ServerSettings};
 
+use crate::link::remote::WebhookProperties;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::error::Elapsed;
 use tokio::{task, time};
@@ -151,7 +152,7 @@ impl Broker {
         // Register this connection with the router. Router replies with ack which if ok will
         // start the link. Router can sometimes reject the connection (ex. max connection limit).
         let (link_tx, link_rx, _ack) =
-            LinkBuilder::new(client_id, self.router_tx.clone()).build()?;
+            LinkBuilder::new(client_id, self.router_tx.clone(), None, None, None, None).build()?;
         Ok((link_tx, link_rx))
     }
 
@@ -194,7 +195,9 @@ impl Broker {
                 let runtime = runtime.enable_all().build().unwrap();
 
                 runtime.block_on(async move {
-                    if let Err(e) = bridge::start(bridge_config, router_tx, V4).await {
+                    if let Err(e) =
+                        bridge::start(bridge_config, router_tx, V4, None, None, None, None).await
+                    {
                         error!(error=?e, "Bridge Link error");
                     };
                 });
@@ -307,7 +310,8 @@ impl Broker {
         }
 
         if let Some(console) = self.config.console.clone() {
-            let console_link = ConsoleLink::new(console, self.router_tx.clone());
+            let console_link =
+                ConsoleLink::new(console, self.router_tx.clone(), None, None, None, None);
 
             let console_link = Arc::new(console_link);
             let console_thread = thread::Builder::new().name("Console".to_string());
@@ -497,6 +501,9 @@ async fn remote<P: Protocol>(
     protocol: P,
     will_handlers: Arc<Mutex<HashMap<String, Sender<AwaitingWill>>>>,
 ) {
+    let webhook_url = config.webhook_url.to_owned();
+    let retained_url = config.retained_url.to_owned();
+    let authorization_url = config.authorization_url.to_owned();
     let mut network = Network::new(
         stream,
         config.max_payload_size,
@@ -513,10 +520,10 @@ async fn remote<P: Protocol>(
             return;
         }
     };
-
-    let (mut client_id, clean_session) = match &connect_packet {
-        Packet::Connect(ref connect, _, _, _, _) => {
-            (connect.client_id.clone(), connect.clean_session)
+    let (mut client_id, clean_session, username) = match &connect_packet {
+        Packet::Connect(ref connect, _, _, _, login) => {
+            let username = login.as_ref().map(|login| login.username.to_string());
+            (connect.client_id.clone(), connect.clean_session, username)
         }
         _ => unreachable!(),
     };
@@ -558,6 +565,12 @@ async fn remote<P: Protocol>(
         connect_packet,
         dynamic_filters,
         assigned_client_id,
+        WebhookProperties {
+            username,
+            webhook_url,
+            retained_url,
+            authorization_url,
+        },
     )
     .await
     {
