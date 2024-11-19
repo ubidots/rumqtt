@@ -1,19 +1,28 @@
 use std::env;
+use std::path::Path;
 
 use config::builder::DefaultState;
-use config::ConfigBuilder;
-use config::{Environment, FileFormat};
+use config::Environment;
+use config::{ConfigBuilder, File};
 
 use crate::Config;
 
-pub fn get_settings(default_config_file: String) -> Config {
+fn update_settings(
+    builder: ConfigBuilder<DefaultState>,
+    file_path: &str,
+) -> ConfigBuilder<DefaultState> {
+    if Path::new(file_path).exists() {
+        return builder.add_source(File::with_name(file_path));
+    }
+    builder
+}
+
+pub fn get_settings() -> Config {
     let mut config_builder = config::Config::builder();
-    config_builder = config_builder
-        .add_source(config::File::from_str(
-            &default_config_file,
-            FileFormat::Toml,
-        ))
-        .add_source(Environment::with_prefix("DYNACONF").separator("__"));
+    config_builder =
+        config_builder.add_source(Environment::with_prefix("DYNACONF").separator("__"));
+    config_builder = update_settings(config_builder, "config/default.toml");
+    config_builder = update_settings(config_builder, "config/local.toml");
     config_builder = update_settings_from_environment(config_builder);
     let result: Config = config_builder.build().unwrap().try_deserialize().unwrap();
     result

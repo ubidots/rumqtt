@@ -269,7 +269,7 @@ impl DataLog {
         self.retained_publishes.remove(&topic);
     }
 
-    pub fn read_retained_messages(&mut self, filter: &str) -> Vec<PubWithProp> {
+    pub fn _read_retained_messages(&mut self, filter: &str) -> Vec<PubWithProp> {
         trace!(info = "reading retain msg", filter = &filter);
         let now = Instant::now();
 

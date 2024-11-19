@@ -220,7 +220,7 @@ impl Router {
 
         // A connection should not be scheduled multiple times
         #[cfg(debug_assertions)]
-        if let Some(readyqueue) = self.scheduler.check_readyqueue_duplicates() {
+        if let Some(readyqueue) = self.scheduler._check_readyqueue_duplicates() {
             warn!(
                 "Connection was scheduled multiple times in readyqueue: {:?}",
                 readyqueue

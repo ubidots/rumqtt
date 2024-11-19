@@ -8,8 +8,6 @@ use clap::Parser;
 use tracing::trace;
 use tracing_subscriber::EnvFilter;
 
-static RUMQTTD_DEFAULT_CONFIG: &str = include_str!("../rumqttd.toml");
-
 #[derive(Parser)]
 #[command(version)]
 #[command(name = "rumqttd")]
@@ -37,12 +35,6 @@ enum Command {
 
 fn main() {
     let commandline: CommandLine = CommandLine::parse();
-
-    if let Some(Command::GenerateConfig) = commandline.command {
-        println!("{RUMQTTD_DEFAULT_CONFIG}");
-        return;
-    }
-
     if !commandline.quiet {
         banner();
     }
@@ -63,7 +55,7 @@ fn main() {
         .try_init()
         .expect("initialized subscriber successfully");
 
-    let mut configs = utils_settings::get_settings(RUMQTTD_DEFAULT_CONFIG.to_string());
+    let mut configs = utils_settings::get_settings();
     let webhook_url = utils_settings::get_webhook_url(&configs);
     let authentication_url = utils_settings::get_authentication_url(&configs);
     let authorization_url = utils_settings::get_authorization_url(&configs);
