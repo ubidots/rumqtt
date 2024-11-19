@@ -164,13 +164,10 @@ pub async fn webhook(webhook_url: &str, webhook_payload: WebhookPayload) -> Webh
     };
     let status_code = response.status();
     match status_code {
-        reqwest::StatusCode::OK => {
-            let result_json: WebhookResponse = response.json().await.unwrap();
-            WebhookResultResponse {
-                webhook_response: Some(result_json),
-                status_code: status_code.as_u16(),
-            }
-        }
+        reqwest::StatusCode::OK => WebhookResultResponse {
+            webhook_response: None,
+            status_code: status_code.as_u16(),
+        },
         _ => WebhookResultResponse {
             webhook_response: None,
             status_code: status_code.as_u16(),
@@ -230,13 +227,10 @@ pub fn webhook_blocking(
     };
     let status_code = response.status();
     match status_code {
-        reqwest::StatusCode::OK => {
-            let result_json: WebhookResponse = response.json().unwrap();
-            WebhookResultResponse {
-                webhook_response: Some(result_json),
-                status_code: status_code.as_u16(),
-            }
-        }
+        reqwest::StatusCode::OK => WebhookResultResponse {
+            webhook_response: None,
+            status_code: status_code.as_u16(),
+        },
         _ => WebhookResultResponse {
             webhook_response: None,
             status_code: status_code.as_u16(),

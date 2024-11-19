@@ -1,3 +1,5 @@
+use crate::requests::utils_webhook::remove_username_from_topic;
+
 use super::*;
 use bytes::{Buf, Bytes};
 use core::str;
@@ -43,17 +45,9 @@ pub fn read(fixed_header: FixedHeader, mut bytes: Bytes) -> Result<Publish, Erro
     Ok(publish)
 }
 
-fn replace_topic(topic: Bytes) -> Bytes {
-    let re = Regex::new(r"/users/[^/]+").unwrap();
-    let topic_string: String = String::from_utf8(topic.to_vec()).unwrap();
-    let topic_string = re.replace(&topic_string, "");
-    let topic_bytes = topic_string.as_bytes().to_vec();
-    Bytes::from(topic_bytes)
-}
-
 pub fn write(publish: &Publish, buffer: &mut BytesMut) -> Result<usize, Error> {
     let topic = publish.topic.clone();
-    let new_topic = replace_topic(publish.topic.clone());
+    let new_topic = remove_username_from_topic(publish.topic.clone());
     let delta = new_topic.len() - topic.len();
     let len = publish.len() + delta;
 

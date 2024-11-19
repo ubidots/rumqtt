@@ -6,6 +6,7 @@ use crate::protocol::{
 };
 use crate::requests::utils_requests;
 use crate::requests::utils_requests::MqttRetainedPayload;
+use crate::requests::utils_webhook;
 use crate::router::alertlog::alert;
 use crate::router::scheduler::{PauseReason, Tracker};
 use crate::router::{ConnectionEvents, Forward};
@@ -657,13 +658,10 @@ impl Router {
 
                     for f in &mut subscribe.filters {
                         let connection = self.connections.get_mut(id).unwrap();
-                        let mut new_path = f.path.clone();
-                        let username = connection.username.clone().unwrap_or("".to_string());
-                        new_path = new_path
-                            .replace("/v1.6/", format!("/v1.6/users/{}/", username).as_str());
-                        new_path = new_path
-                            .replace("/v2.0/", format!("/v2.0/users/{}/", username).as_str());
-                        f.path = new_path;
+                        f.path = utils_webhook::add_username_to_topic(
+                            &f.path,
+                            connection.username.clone(),
+                        );
                         let span =
                             tracing::info_span!("subscribe", topic = f.path, pkid = subscribe.pkid);
                         let _guard = span.enter();

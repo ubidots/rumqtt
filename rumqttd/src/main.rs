@@ -1,6 +1,4 @@
-use log::info;
 use rumqttd::requests::utils_requests;
-use rumqttd::requests::utils_requests::WebhookPayload;
 use rumqttd::requests::utils_settings;
 use rumqttd::Broker;
 
@@ -80,36 +78,12 @@ fn main() {
     broker.start().unwrap();
 }
 
-async fn auth(webhook_url: String, client_id: String, username: String, password: String) -> bool {
+async fn auth(webhook_url: String, _client_id: String, username: String, password: String) -> bool {
     // users can fetch data from DB or tokens and use them!
     // do the verification and return true if verified, else false
     let result = utils_requests::authenticate_user(&webhook_url, &username, &password).await;
     match result.auth_response {
-        Some(response) => {
-            let result = response.result == "allow";
-            if result {
-                let response = utils_requests::webhook(
-                    &webhook_url,
-                    WebhookPayload {
-                        clientid: Some(client_id),
-                        payload: None,
-                        topic: None,
-                        action: None,
-                        username: Some(username),
-                        reason_code: None,
-                        event: Some("client.check_authn_complete".to_string()),
-                    },
-                )
-                .await;
-                if response.status_code != reqwest::StatusCode::OK {
-                    info!(
-                        "Webhook response error {:?}.",
-                        response.webhook_response.unwrap().result
-                    );
-                }
-            }
-            result
-        }
+        Some(response) => response.result == "allow",
         None => false,
     }
 }
