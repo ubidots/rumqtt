@@ -80,7 +80,7 @@ where
         let mut network = match network_connect(&config, &config.addr, protocol.clone()).await {
             Ok(v) => v,
             Err(e) => {
-                error!(error=?e, "Error, retrying");
+                info!(error=?e, "Error, retrying");
                 sleep(Duration::from_secs(config.reconnection_delay)).await;
                 continue;
             }

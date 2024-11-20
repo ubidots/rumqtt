@@ -157,7 +157,7 @@ impl<P: Protocol> RemoteLink<P> {
             select! {
                 o = self.network.read() => {
                     let packet = o?;
-                    let client_id = self.client_id.to_string();
+                    let client_id = self.client_id.to_owned();
                     let username = self.username.to_owned();
                     let webhook_url = self.webhook_url.to_owned();
                     utils_webhook::call_webhook_from_packet(packet.clone(), client_id, username, webhook_url).await;

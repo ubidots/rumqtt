@@ -290,6 +290,10 @@ pub struct WebhookConfig {
     retained_host: String,
     retained_port: String,
     retained_endpoint: String,
+    metrics_protocol: String,
+    metrics_host: String,
+    metrics_port: String,
+    metrics_endpoint: String,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

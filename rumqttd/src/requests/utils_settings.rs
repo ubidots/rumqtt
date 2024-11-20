@@ -76,6 +76,18 @@ pub fn get_retained_url(config: &Config) -> String {
     "".to_string()
 }
 
+pub fn get_metrics_url(config: &Config) -> String {
+    if let Some(webhook_config) = &config.webhook {
+        let protocol = webhook_config.metrics_protocol.to_string();
+        let host = webhook_config.metrics_host.to_string();
+        let port = webhook_config.metrics_port.to_string();
+        let endpoint = webhook_config.metrics_endpoint.to_string();
+        let result = format!("{protocol}://{host}:{port}{endpoint}");
+        return result;
+    }
+    "".to_string()
+}
+
 fn update_webhook_configuration(
     builder: ConfigBuilder<DefaultState>,
     host_env_variable: &str,
@@ -143,6 +155,15 @@ pub fn update_settings_from_environment(
         "UBIDOTS_REACTOR_MQTT_SERVER_SERVICE_PORT",
         "webhook.retained_host",
         "webhook.retained_port",
+    );
+    builder = update_webhook_configuration(
+        builder,
+        "MQTT_METRICS_HOST_ENV_VARIABLE",
+        "MQTT_METRICS_PORT_ENV_VARIABLE",
+        "UBIDOTS_REACTOR_MQTT_SERVER_SERVICE_HOST",
+        "UBIDOTS_REACTOR_MQTT_SERVER_SERVICE_PORT",
+        "webhook.metrics_host",
+        "webhook.metrics_port",
     );
     builder
 }

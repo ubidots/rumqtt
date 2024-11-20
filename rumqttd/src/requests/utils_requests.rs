@@ -2,6 +2,8 @@ use serde;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::router::{RouterMeter, SubscriptionMeter};
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct AuthResponse {
     pub result: String,
@@ -65,6 +67,24 @@ pub struct MqttRetainedResult {
     pub topic: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MetricsPayload {
+    pub server_id: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub router_id: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub router_meter: Option<RouterMeter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscription_meter: Option<SubscriptionMeter>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct MetricsResponse {
+    pub status_code: u16,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -170,6 +190,33 @@ pub async fn webhook(webhook_url: &str, webhook_payload: WebhookPayload) -> Webh
         },
         _ => WebhookResultResponse {
             webhook_response: None,
+            status_code: status_code.as_u16(),
+        },
+    }
+}
+
+pub fn metrics(metrics_url: &str, metrics_payloads: Vec<MetricsPayload>) -> MetricsResponse {
+    let value = serde_json::to_string(&metrics_payloads).unwrap();
+    println!("Value {}", value);
+    let response = reqwest::blocking::Client::new()
+        .post(metrics_url)
+        .json(&metrics_payloads)
+        .send();
+
+    let response = match response {
+        Ok(response) => response,
+        Err(_) => {
+            return MetricsResponse {
+                status_code: reqwest::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            };
+        }
+    };
+    let status_code = response.status();
+    match status_code {
+        reqwest::StatusCode::OK => MetricsResponse {
+            status_code: status_code.as_u16(),
+        },
+        _ => MetricsResponse {
             status_code: status_code.as_u16(),
         },
     }

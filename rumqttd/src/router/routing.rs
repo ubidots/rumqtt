@@ -173,7 +173,7 @@ impl Router {
         router
             .spawn(move || {
                 let e = self.run(0);
-                error!(reason=?e, "Router done!");
+                info!(reason=?e, "Router done!");
             })
             .unwrap();
         link
@@ -278,7 +278,7 @@ impl Router {
     ) {
         let client_id = outgoing.client_id.clone();
         if let Err(err) = validate_clientid(&client_id) {
-            error!("Invalid client_id: {}", err);
+            info!("Invalid client_id: {}", err);
             return;
         };
 
@@ -291,7 +291,7 @@ impl Router {
 
             let connection_id = self.connection_map.get(&client_id);
             if let Some(connection_id) = connection_id {
-                error!(
+                info!(
                     "Duplicate client_id, dropping previous connection with connection_id: {}",
                     connection_id
                 );
@@ -419,7 +419,7 @@ impl Router {
         let client_id = match &self.obufs.get(id) {
             Some(v) => v.client_id.clone(),
             None => {
-                error!("no-connection id {} is already gone", id);
+                info!("no-connection id {} is already gone", id);
                 return;
             }
         };
@@ -439,7 +439,7 @@ impl Router {
             let outgoing = match self.obufs.get_mut(id) {
                 Some(v) => v,
                 None => {
-                    error!("no-connection id {} is already gone", id);
+                    info!("no-connection id {} is already gone", id);
                     return;
                 }
             };
@@ -542,7 +542,7 @@ impl Router {
         let incoming = match self.ibufs.get_mut(id) {
             Some(v) => v,
             None => {
-                error!("no-connection id {} is already gone", id);
+                info!("no-connection id {} is already gone", id);
                 return;
             }
         };
@@ -630,7 +630,7 @@ impl Router {
                         }
                         Err(e) => {
                             // Disconnect on bad publishes
-                            error!(
+                            info!(
                                 reason = ?e, "Failed to append to commitlog"
                             );
                             self.router_meters.failed_publishes += 1;
@@ -646,7 +646,7 @@ impl Router {
 
                     let meter = &mut self.ibufs.get_mut(id).unwrap().meter;
                     if let Err(e) = meter.register_publish(&publish) {
-                        error!(
+                        info!(
                             reason = ?e, "Failed to write to incoming meter"
                         );
                     };
@@ -686,7 +686,7 @@ impl Router {
                         let subscription_id = props.as_ref().and_then(|p| p.id);
 
                         if subscription_id == Some(0) {
-                            error!("Subscription identifier can't be 0");
+                            info!("Subscription identifier can't be 0");
                             disconnect = true;
                             disconnect_reason = Some(DisconnectReasonCode::ProtocolError);
                             break;
@@ -777,7 +777,7 @@ impl Router {
                     let outgoing = self.obufs.get_mut(id).unwrap();
                     let pkid = puback.pkid;
                     if outgoing.register_ack(pkid).is_none() {
-                        error!(pkid, "Unsolicited/ooo ack received for pkid {}", pkid);
+                        info!(pkid, "Unsolicited/ooo ack received for pkid {}", pkid);
                         disconnect = true;
                         break;
                     }
@@ -791,7 +791,7 @@ impl Router {
                     let outgoing = self.obufs.get_mut(id).unwrap();
                     let pkid = pubrec.pkid;
                     if outgoing.register_ack(pkid).is_none() {
-                        error!(pkid, "Unsolicited/ooo ack received for pkid {}", pkid);
+                        info!(pkid, "Unsolicited/ooo ack received for pkid {}", pkid);
                         disconnect = true;
                         break;
                     }
@@ -845,7 +845,7 @@ impl Router {
                         }
                         Err(e) => {
                             // Disconnect on bad publishes
-                            error!(
+                            info!(
                                 reason = ?e, "Failed to append to commitlog"
                             );
                             self.router_meters.failed_publishes += 1;
@@ -862,7 +862,7 @@ impl Router {
                     let outgoing = self.obufs.get_mut(id).unwrap();
                     let pkid = pubcomp.pkid;
                     if outgoing.register_pubcomp(pkid).is_none() {
-                        error!(
+                        info!(
                             pkid,
                             "ack received for pkid {}, but the pkid didn't exists!", pkid
                         );
@@ -1013,7 +1013,7 @@ impl Router {
         let outgoing = match self.obufs.get_mut(id) {
             Some(v) => v,
             None => {
-                error!("Connection is already disconnected");
+                info!("Connection is already disconnected");
                 return Some(());
             }
         };
@@ -1150,7 +1150,7 @@ impl Router {
             }
             Err(e) => {
                 // Disconnect on bad publishes
-                error!(
+                info!(
                     reason = ?e, "Failed to append to commitlog"
                 );
                 self.router_meters.failed_publishes += 1;
@@ -1174,7 +1174,7 @@ impl Router {
         if !meters.is_empty() {
             for (meter_id, link) in self.meters.iter() {
                 if let Err(e) = link.try_send(meters.clone()) {
-                    error!(meter_id, "Failed to send meter. Error = {:?}", e);
+                    info!(meter_id, "Failed to send meter. Error = {:?}", e);
                 }
             }
         }
@@ -1187,7 +1187,7 @@ impl Router {
             let alerts: Vec<Alert> = alerts.into();
             for (meter_id, link) in self.alerts.iter() {
                 if let Err(e) = link.try_send(alerts.clone()) {
-                    error!(meter_id, "Failed to send alert. Error = {:?}", e);
+                    info!(meter_id, "Failed to send alert. Error = {:?}", e);
                 }
             }
         }
@@ -1214,7 +1214,7 @@ fn append_to_commitlog(
         .as_ref()
         .is_some_and(|p| !p.subscription_identifiers.is_empty())
     {
-        error!("A PUBLISH packet sent from a Client to a Server MUST NOT contain a Subscription Identifier");
+        info!("A PUBLISH packet sent from a Client to a Server MUST NOT contain a Subscription Identifier");
         return Err(RouterError::Disconnect(
             DisconnectReasonCode::MalformedPacket,
         ));
@@ -1273,7 +1273,7 @@ fn append_to_commitlog(
         o = offset;
     }
 
-    // error!("{:15.15}[E] {:20} topic = {}", connections[id].client_id, "no-filter", topic);
+    // info!("{:15.15}[E] {:20} topic = {}", connections[id].client_id, "no-filter", topic);
     Ok(o)
 }
 
@@ -1289,7 +1289,7 @@ fn append_will_message(
         .as_ref()
         .is_some_and(|p| !p.subscription_identifiers.is_empty())
     {
-        error!("A PUBLISH packet sent from a Client to a Server MUST NOT contain a Subscription Identifier");
+        info!("A PUBLISH packet sent from a Client to a Server MUST NOT contain a Subscription Identifier");
         return Err(RouterError::Disconnect(
             DisconnectReasonCode::MalformedPacket,
         ));
@@ -1348,7 +1348,7 @@ fn validate_and_set_topic_alias(
     alias: u16,
 ) -> Result<(), RouterError> {
     if alias == 0 || alias > TOPIC_ALIAS_MAX {
-        error!("Alias must be greater than 0 and <={TOPIC_ALIAS_MAX}");
+        info!("Alias must be greater than 0 and <={TOPIC_ALIAS_MAX}");
         return Err(RouterError::Disconnect(
             DisconnectReasonCode::TopicAliasInvalid,
         ));
@@ -1357,7 +1357,7 @@ fn validate_and_set_topic_alias(
     if publish.topic.is_empty() {
         // if publish topic is empty, publisher must have set a valid alias
         let Some(alias_topic) = connection.topic_aliases.get(&alias) else {
-            error!("Empty topic name with invalid alias");
+            info!("Empty topic name with invalid alias");
             return Err(RouterError::Disconnect(DisconnectReasonCode::ProtocolError));
         };
         // set the publish topic before further processing
@@ -1528,7 +1528,7 @@ fn forward_device_data(
         match datalog.native_readv(request.filter_idx, request.cursor, inflight_slots) {
             Ok(v) => v,
             Err(e) => {
-                error!(error = ?e, "Failed to read from commitlog {}", e);
+                info!(error = ?e, "Failed to read from commitlog {}", e);
                 return ConsumeStatus::FilterCaughtup;
             }
         };
