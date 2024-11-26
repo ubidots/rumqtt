@@ -198,7 +198,7 @@ impl Broker {
                     if let Err(e) =
                         bridge::start(bridge_config, router_tx, V4, None, None, None, None).await
                     {
-                        error!(error=?e, "Bridge Link error");
+                        info!(error=?e, "Bridge Link error");
                     };
                 });
             })?;
@@ -215,7 +215,7 @@ impl Broker {
 
                     runtime.block_on(async {
                         if let Err(e) = server.start(LinkType::Remote).await {
-                            error!(error=?e, "Server error - V4");
+                            info!(error=?e, "Server error - V4");
                         }
                     });
                 })?;
@@ -233,7 +233,7 @@ impl Broker {
 
                     runtime.block_on(async {
                         if let Err(e) = server.start(LinkType::Remote).await {
-                            error!(error=?e, "Server error - V5");
+                            info!(error=?e, "Server error - V5");
                         }
                     });
                 })?;
@@ -258,7 +258,7 @@ impl Broker {
 
                     runtime.block_on(async {
                         if let Err(e) = server.start(LinkType::Websocket).await {
-                            error!(error=?e, "Server error - WS");
+                            info!(error=?e, "Server error - WS");
                         }
                     });
                 })?;
@@ -399,7 +399,7 @@ impl<P: Protocol + Clone + Send + 'static> Server<P> {
             let (stream, addr) = match listener.accept().await {
                 Ok((s, r)) => (s, r),
                 Err(e) => {
-                    error!(error=?e, "Unable to accept socket.");
+                    info!(error=?e, "Unable to accept socket.");
                     continue;
                 }
             };
@@ -407,7 +407,7 @@ impl<P: Protocol + Clone + Send + 'static> Server<P> {
             let (network, tenant_id) = match self.tls_accept(stream).await {
                 Ok(o) => o,
                 Err(e) => {
-                    error!(error=?e, "Tls accept error");
+                    info!(error=?e, "Tls accept error");
                     continue;
                 }
             };
@@ -427,7 +427,7 @@ impl<P: Protocol + Clone + Send + 'static> Server<P> {
                     let stream = match accept_hdr_async(network, WSCallback).await {
                         Ok(s) => Box::new(WsStream::new(s)),
                         Err(e) => {
-                            error!(error=?e, "Websocket failed handshake");
+                            info!(error=?e, "Websocket failed handshake");
                             continue;
                         }
                     };
@@ -516,7 +516,7 @@ async fn remote<P: Protocol>(
     let connect_packet = match mqtt_connect(config, &mut network).await {
         Ok(p) => p,
         Err(e) => {
-            error!(error=?e, "Error while handling MQTT connect packet");
+            info!(error=?e, "Error while handling MQTT connect packet");
             return;
         }
     };
@@ -576,7 +576,7 @@ async fn remote<P: Protocol>(
     {
         Ok(l) => l,
         Err(e) => {
-            error!(error=?e, "Remote link error");
+            info!(error=?e, "Remote link error");
             return;
         }
     };
@@ -587,11 +587,11 @@ async fn remote<P: Protocol>(
 
     match link.start().await {
         // Connection got closed. This shouldn't usually happen.
-        Ok(_) => error!("connection-stop"),
+        Ok(_) => info!("connection-stop"),
         // No need to send a disconnect message when disconnection
         // originated internally in the router.
         Err(remote::Error::Link(e)) => {
-            error!(error=?e, "router-drop");
+            info!(error=?e, "router-drop");
             send_disconnect = false;
         }
         // Connection was closed by peer
@@ -602,7 +602,7 @@ async fn remote<P: Protocol>(
         }
         // Any other error
         Err(e) => {
-            error!(error=?e, "disconnected");
+            info!(error=?e, "disconnected");
         }
     };
 

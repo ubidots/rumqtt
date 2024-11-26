@@ -196,8 +196,6 @@ pub async fn webhook(webhook_url: &str, webhook_payload: WebhookPayload) -> Webh
 }
 
 pub fn metrics(metrics_url: &str, metrics_payloads: Vec<MetricsPayload>) -> MetricsResponse {
-    let value = serde_json::to_string(&metrics_payloads).unwrap();
-    println!("Value {}", value);
     let response = reqwest::blocking::Client::new()
         .post(metrics_url)
         .json(&metrics_payloads)

@@ -6,6 +6,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
+#[macro_use]
+extern crate lazy_static;
+
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{
     filter::EnvFilter,
@@ -76,6 +79,17 @@ pub struct Config {
     pub prometheus: Option<PrometheusSetting>,
     pub metrics: Option<HashMap<MetricType, MetricSettings>>,
     pub webhook: Option<WebhookConfig>,
+    pub health_check: HealthCheckSettings,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct HealthCheckSettings {
+    pub health_check_username: String,
+    pub health_check_password: String,
+    pub health_check_client_id: String,
+    pub health_check_topic: String,
+    pub health_check_port: u16,
+    pub health_check_host: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

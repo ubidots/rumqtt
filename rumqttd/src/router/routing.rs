@@ -1787,21 +1787,23 @@ fn validate_subscription(
         return Err(RouterError::InvalidFilterPrefix(filter.path.to_owned()));
     }
     let action = "subscribe";
-    let username = connection.username.clone().unwrap_or("".to_string());
     let topic = &filter.path;
     let authorization_url = connection.authorization_url.to_owned();
     match authorization_url {
-        Some(authorization_url) => {
-            let response =
-                utils_requests::authorize_user(&authorization_url, &username, topic, action);
-            match response.auth_response {
-                Some(response) => match response.result.as_str() {
-                    "allow" => Ok(()),
-                    _ => Err(RouterError::UserNotAuthorized(username)),
-                },
-                None => Ok(()),
+        Some(authorization_url) => match connection.username.clone() {
+            Some(username) => {
+                let response =
+                    utils_requests::authorize_user(&authorization_url, &username, topic, action);
+                match response.auth_response {
+                    Some(response) => match response.result.as_str() {
+                        "allow" => Ok(()),
+                        _ => Err(RouterError::UserNotAuthorized(username)),
+                    },
+                    None => Ok(()),
+                }
             }
-        }
+            None => Ok(()),
+        },
         None => Ok(()),
     }
 }

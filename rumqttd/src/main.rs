@@ -1,12 +1,9 @@
-use std::thread;
-
 use rumqttd::requests::utils_requests;
-use rumqttd::requests::utils_requests::MetricsPayload;
 use rumqttd::requests::utils_settings;
 use rumqttd::Broker;
 
 use clap::Parser;
-use rumqttd::Meter;
+use rumqttd::requests::utils_settings::SETTINGS;
 use tracing::trace;
 use tracing_subscriber::EnvFilter;
 
@@ -35,7 +32,8 @@ enum Command {
     GenerateConfig,
 }
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let commandline: CommandLine = CommandLine::parse();
     if !commandline.quiet {
         banner();
@@ -58,9 +56,7 @@ fn main() {
         .expect("initialized subscriber successfully");
 
     let mut configs = utils_settings::get_settings();
-    let server_id = configs.id.to_owned();
     let webhook_url = utils_settings::get_webhook_url(&configs);
-    let metrics_url = utils_settings::get_metrics_url(&configs);
     let authentication_url = utils_settings::get_authentication_url(&configs);
     let authorization_url = utils_settings::get_authorization_url(&configs);
     let retained_url = utils_settings::get_retained_url(&configs);
@@ -81,37 +77,18 @@ fn main() {
         retained_url.to_string(),
     );
     let mut broker = Broker::new(configs);
-    let meters = broker.meters().unwrap();
-    thread::spawn(move || loop {
-        if let Ok(meters_vector) = meters.recv() {
-            let metrics_payloads: Vec<MetricsPayload> = meters_vector
-                .iter()
-                .map(|meter| match meter {
-                    Meter::Router(router_id, router_meter) => MetricsPayload {
-                        server_id,
-                        router_id: Some(router_id.to_owned()),
-                        router_meter: Some(router_meter.to_owned()),
-                        subscription_meter: None,
-                        topic: None,
-                    },
-                    Meter::Subscription(topic, subscription_meter) => MetricsPayload {
-                        server_id,
-                        router_id: None,
-                        router_meter: None,
-                        subscription_meter: Some(subscription_meter.to_owned()),
-                        topic: Some(topic.to_owned()),
-                    },
-                })
-                .collect();
-            utils_requests::metrics(&metrics_url, metrics_payloads);
-        }
-    });
     broker.start().unwrap();
 }
 
-async fn auth(webhook_url: String, _client_id: String, username: String, password: String) -> bool {
+async fn auth(webhook_url: String, client_id: String, username: String, password: String) -> bool {
     // users can fetch data from DB or tokens and use them!
     // do the verification and return true if verified, else false
+    if client_id == SETTINGS.health_check.health_check_client_id
+        && username == SETTINGS.health_check.health_check_username
+        && password == SETTINGS.health_check.health_check_password
+    {
+        return true;
+    }
     let result = utils_requests::authenticate_user(&webhook_url, &username, &password).await;
     match result.auth_response {
         Some(response) => response.result == "allow",

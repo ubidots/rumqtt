@@ -109,6 +109,7 @@ mod client;
 mod eventloop;
 mod framed;
 pub mod mqttbytes;
+pub mod settings;
 mod state;
 pub mod v5;
 

@@ -17,6 +17,10 @@ fn update_settings(
     builder
 }
 
+lazy_static! {
+    pub static ref SETTINGS: Config = get_settings();
+}
+
 pub fn get_settings() -> Config {
     let mut config_builder = config::Config::builder();
     config_builder =
